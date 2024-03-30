@@ -4,19 +4,21 @@
 Mostly made out of interest using Rust
 
 ## Usage
-1. Run VTubeStudio on PC and IPhone
-2. Run this tool `rusty-bridge.exe <ip> <config_file>`
-3. Allow connection in VTubeStudio
-4. Done
-
-Run params:
-`ip` - IPhone ipv4 local addres
-`config_file` - path to config .json file
-
-Example:
-`rusty-bridge.exe 192.168.0.174 test.json`
+1. Create Config & Params files
+2. Run VTubeStudio on PC and IPhone
+3. Run this tool `rusty-bridge.exe`
+4. Allow connection in VTubeStudio
+5. Done
 
 Config File Example:
+```json
+{
+  "funcFile": "test.json", //Path to params .json file
+  "iphoneIp": "192.168.0.1" //IPhone ipv4 local addres
+}
+```
+
+Params File Example:
 ```json
 [
   {
