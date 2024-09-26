@@ -2,7 +2,11 @@ use std::{
     collections::VecDeque,
     fs,
     net::{TcpStream, UdpSocket},
-    sync::{atomic::{AtomicBool, Ordering}, mpsc::Receiver, Arc},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::Receiver,
+        Arc,
+    },
 };
 
 use evalexpr::{ContextWithMutableVariables, HashMapContext, Node};
@@ -323,6 +327,10 @@ impl VtsPc {
                                 "InjectParameterDataResponse" => {
                                     // println!("{:?}", msg);
                                 }
+                                "ParameterCreationResponse" => {
+                                    // println!("{:?}", msg);
+                                    msg_buffer.pop_front();
+                                }
                                 _ => warn!("Unknown message: {}", msg_value["messageType"]),
                             },
                             None => warn!("No type in responce: {}", msg.to_text().unwrap()),
@@ -547,7 +555,16 @@ impl VtsPc {
 
                         new_params.push_back(Message::text(param_req_msg));
                     }
-                    evalexpr::build_operator_tree(&func.func[..]).unwrap()
+                    match evalexpr::build_operator_tree(&func.func[..]) {
+                        Ok(calc) => calc,
+                        Err(error) => {
+                            error!(
+                                "Unable to read cfg (probably error or typo in function): {}",
+                                error
+                            );
+                            panic!()
+                        }
+                    }
                 })
             })
             .collect();

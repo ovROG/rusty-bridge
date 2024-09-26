@@ -36,6 +36,8 @@ For CLI use `rusty-bridge.exe` with launch params
 
 Json file where you define transformations and new Params.
 
+for math and logic commands you can look [here](https://docs.rs/evalexpr/latest/evalexpr/)
+
 There list of params send from IPhone
 
 #### Cords: - ranged from negative to positive probably won't out of -45...45
