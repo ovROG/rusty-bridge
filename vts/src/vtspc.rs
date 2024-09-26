@@ -2,7 +2,7 @@ use std::{
     collections::VecDeque,
     fs,
     net::{TcpStream, UdpSocket},
-    sync::mpsc::Receiver,
+    sync::{atomic::{AtomicBool, Ordering}, mpsc::Receiver, Arc},
 };
 
 use evalexpr::{ContextWithMutableVariables, HashMapContext, Node};
@@ -129,18 +129,19 @@ struct CalcFn {
     default_value: f64,
 }
 
-// #[derive(Debug, PartialEq, Eq)]
-// enum Status {
-//     NoAuth,
-// }
-
 pub struct VtsPc;
 
 impl VtsPc {
-    pub fn run(receiver: Receiver<TrackingResponce>, transformation_cfg_path: String) {
-        loop {
+    pub fn run(
+        receiver: Receiver<TrackingResponce>,
+        transformation_cfg_path: String,
+        active: Arc<AtomicBool>,
+    ) {
+        while active.load(Ordering::Relaxed) {
+            let flag = Arc::clone(&active);
+
             let websocket = VtsPc::connect();
-            VtsPc::msg_loop(websocket, &receiver, &transformation_cfg_path);
+            VtsPc::msg_loop(websocket, &receiver, &transformation_cfg_path, flag);
         }
     }
 
@@ -198,6 +199,7 @@ impl VtsPc {
         mut websocket: WebSocket<MaybeTlsStream<TcpStream>>,
         receiver: &Receiver<TrackingResponce>,
         transformation_cfg_path: &String,
+        active: Arc<AtomicBool>,
     ) {
         let mut msg_buffer: VecDeque<Message> = VecDeque::new();
         let mut token: Option<String> = fs::read_to_string("token").ok();
@@ -213,7 +215,7 @@ impl VtsPc {
 
         let mut dont_send = false;
 
-        loop {
+        while active.load(Ordering::Relaxed) {
             if !dont_send {
                 if let Some(msg) = msg_buffer.front() {
                     match websocket.send(msg.clone()) {
@@ -252,10 +254,10 @@ impl VtsPc {
                                         VTSApiResponce<responces::APIError>,
                                     >(msg_value)
                                     .unwrap();
-                                    warn!("API error: {:?}", err_data.data);
+                                    // warn!("API error: {:?}", err_data.data);
                                     match err_data.data.error_id {
                                         8 => {
-                                            msg_buffer.push_back(VtsPc::auth(&token));
+                                            // msg_buffer.push_back(VtsPc::auth(&token));
                                         }
                                         51 => {
                                             // POPUP ON SCREEN
@@ -302,7 +304,7 @@ impl VtsPc {
                                     token = Some(token_data.data.authentication_token);
                                     info!("Recived Token from VtubeStudio");
                                     msg_buffer.pop_front();
-                                    msg_buffer.push_back(VtsPc::auth(&token));
+                                    msg_buffer.push_front(VtsPc::auth(&token));
                                 }
                                 "AuthenticationResponse" => {
                                     let auth_data = serde_json::from_value::<

@@ -1,4 +1,12 @@
-use std::{net::UdpSocket, sync::mpsc::Sender, time};
+use std::{
+    net::UdpSocket,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::Sender,
+        Arc,
+    },
+    time,
+};
 
 use log::warn;
 
@@ -30,7 +38,7 @@ pub struct TrackingResponce {
 pub struct VtsPhone;
 
 impl VtsPhone {
-    pub fn run(ip: String, sender: Sender<TrackingResponce>) {
+    pub fn run(ip: String, sender: Sender<TrackingResponce>, active: Arc<AtomicBool>) {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let _ = socket.set_read_timeout(Some(time::Duration::new(2, 0)));
         let port = socket.local_addr().unwrap().port();
@@ -47,7 +55,7 @@ impl VtsPhone {
 
         let mut next_time = time::Instant::now();
 
-        loop {
+        while active.load(Ordering::Relaxed) {
             if next_time <= time::Instant::now() {
                 next_time = time::Instant::now() + time::Duration::from_secs(1);
 

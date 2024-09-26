@@ -1,11 +1,15 @@
+#![windows_subsystem = "windows"]
 extern crate native_windows_derive as nwd;
 extern crate native_windows_gui as nwg;
 
 use std::{
-    cell::Cell,
     env, fs,
-    sync::mpsc::{self, Receiver, Sender},
-    thread::{self, JoinHandle},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::{self, Receiver, Sender},
+        Arc,
+    },
+    thread::{self},
 };
 
 use nwd::NwgUi;
@@ -24,12 +28,20 @@ pub struct UiCfg {
 
 #[derive(Default, NwgUi)]
 pub struct App {
-    #[nwg_control(size: (300, 135), position: (300, 300), title: "Rusty Bridge", flags: "WINDOW|VISIBLE")]
+    #[nwg_control(size: (300, 140), position: (300, 300), title: "Rusty Bridge", flags: "WINDOW|VISIBLE")]
     #[nwg_events( OnWindowClose: [App::close], OnInit: [App::init] )]
     window: nwg::Window,
 
     #[nwg_resource]
     embed: nwg::EmbedResource,
+
+    #[nwg_control(size: (240, 25), position: (10, 12), placeholder_text: Some("Path to transform file"))]
+    #[nwg_events( OnTextInput: [App::save] )]
+    transform_file_path: nwg::TextInput,
+
+    #[nwg_control(text: "📃", size: (30, 30), position: (260, 10))]
+    #[nwg_events( OnButtonClick: [App::open_file] )]
+    file_button: nwg::Button,
 
     #[nwg_control(size: (280, 25), position: (10, 52), placeholder_text: Some("(0.0.0.0) IPhone Ip"))]
     #[nwg_events( OnTextInput: [App::save] )]
@@ -39,13 +51,11 @@ pub struct App {
     #[nwg_events( OnButtonClick: [App::connect] )]
     connect_button: nwg::Button,
 
-    #[nwg_control(size: (240, 25), position: (10, 12), placeholder_text: Some("Path to transform file"))]
-    #[nwg_events( OnTextInput: [App::save] )]
-    transform_file_path: nwg::TextInput,
+    #[nwg_resource(size: 14)]
+    label_font: nwg::Font,
 
-    #[nwg_control(text: "📃", size: (30, 30), position: (260, 10))]
-    #[nwg_events( OnButtonClick: [App::open_file] )]
-    file_button: nwg::Button,
+    #[nwg_control(text: "https://github.com/ovROG/rusty-bridge", position: (10, 120), size: (240, 15), font: Some(&data.label_font))]
+    credits: nwg::Label,
 
     #[nwg_resource( action: FileDialogAction::Open, title: "Select Transfom File")]
     file_dialog: nwg::FileDialog,
@@ -65,7 +75,7 @@ pub struct App {
     #[nwg_events(OnMenuItemSelected: [App::exit])]
     tray_item3: nwg::MenuItem,
 
-    connected: Cell<bool>,
+    active: Arc<AtomicBool>,
 }
 
 impl App {
@@ -96,28 +106,34 @@ impl App {
     }
 
     fn connect(&self) {
-        if self.connected.get() {
+        if !self.active.load(Ordering::Relaxed) {
+            self.active.store(true, Ordering::Relaxed);
             let path = self.transform_file_path.text().clone();
             let ip = self.phone_ip.text().clone();
 
             let (sender, receiver): (Sender<TrackingResponce>, Receiver<TrackingResponce>) =
                 mpsc::channel();
 
-            let pctr_handler = thread::spawn(move || {
-                VtsPc::run(receiver, path);
+            let flag_pc = Arc::clone(&self.active);
+            let flag_ph = Arc::clone(&self.active);
+
+            let _ = thread::spawn(move || {
+                VtsPc::run(receiver, path, flag_pc);
             });
 
-            let phonetr_handler = thread::spawn(move || VtsPhone::run(ip, sender));
-
-            //TODO: stop loop to kill thread =c
-            // use mpsc
+            let _ = thread::spawn(move || VtsPhone::run(ip, sender, flag_ph));
 
             self.transform_file_path.set_readonly(true);
             self.phone_ip.set_readonly(true);
             self.file_button.set_enabled(false);
             self.connect_button.set_text("Disconnect");
+        } else {
+            self.active.store(false, Ordering::Relaxed);
 
-            self.connected.set(true);
+            self.transform_file_path.set_readonly(false);
+            self.phone_ip.set_readonly(false);
+            self.file_button.set_enabled(true);
+            self.connect_button.set_text("Connect");
         }
 
         // let _ = pctr_handler.join();

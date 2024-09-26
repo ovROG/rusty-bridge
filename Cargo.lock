@@ -700,7 +700,6 @@ dependencies = [
  "log4rs",
  "native-windows-derive",
  "native-windows-gui",
- "rusty-bridge",
  "rusty-bridge-lib",
  "serde",
  "serde_json",

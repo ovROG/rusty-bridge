@@ -1,10 +1,17 @@
 use std::{
-    sync::mpsc::{self, Receiver, Sender},
+    sync::{
+        atomic::AtomicBool,
+        mpsc::{self, Receiver, Sender},
+        Arc,
+    },
     thread,
 };
 
 use clap::Parser;
-use rusty_bridge_lib::{vtspc::VtsPc, vtsphone::{TrackingResponce, VtsPhone}};
+use rusty_bridge_lib::{
+    vtspc::VtsPc,
+    vtsphone::{TrackingResponce, VtsPhone},
+};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -20,6 +27,10 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
+    println!("Github: https://github.com/ovROG/rusty-bridge");
+
+    let active_flag = Arc::new(AtomicBool::new(true));
+    let active_flag2 = Arc::clone(&active_flag);
 
     let log_config = include_str!("../configs/log_cfg.yml");
     let raw_log_config = serde_yaml::from_str(log_config).unwrap();
@@ -29,10 +40,10 @@ fn main() {
         mpsc::channel();
 
     let pctr_handler = thread::spawn(move || {
-        VtsPc::run(receiver, args.transform_cfg);
+        VtsPc::run(receiver, args.transform_cfg, active_flag);
     });
 
-    let phonetr_handler = thread::spawn(move || VtsPhone::run(args.phone_ip, sender));
+    let phonetr_handler = thread::spawn(move || VtsPhone::run(args.phone_ip, sender, active_flag2));
 
     let _ = pctr_handler.join();
     let _ = phonetr_handler.join();
